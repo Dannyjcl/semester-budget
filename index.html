@@ -331,7 +331,7 @@
 <script>
 const MONTHS = ["August","September","October","November","December"];
 let income = parseFloat(localStorage.getItem('sb-income')) || 0;
-let categories = [
+let categories = JSON.parse(localStorage.getItem('sb-categories')) || [
   {name:"Groceries", budget:""},
   {name:"Eating Out", budget:""},
   {name:"Transportation", budget:""},
@@ -542,6 +542,10 @@ function renderBudget() {
  
 // Init
 renderCatList();
+if (localStorage.getItem('sb-categories')) {
+  document.getElementById("income-input").value = income;
+  startTracking();
+}
 </script>
 </body>
 </html>
