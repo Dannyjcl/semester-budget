@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Semester Budget</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #FDF8F4;
+    --card: #FFFFFF;
+    --accent: #C9856A;
+    --accent-light: #F5E6DF;
+    --accent-soft: #EDD5C8;
+    --text: #2C2420;
+    --muted: #9B8A84;
+    --success: #7AAE8E;
+    --success-light: #E6F3EC;
+    --warn: #E8A838;
+    --warn-light: #FDF3E0;
+    --danger: #D95F5F;
+    --danger-light: #FDEAEA;
+    --border: #EDE4DF;
+  }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+  .app { max-width: 480px; margin: 0 auto; }
+ 
+  /* HEADER */
+  .header {
+    background: var(--accent);
+    padding: 28px 22px 20px;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .header h1 { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; }
+  .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+  .edit-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+ 
+  /* SECTIONS */
+  .section { padding: 0 16px; margin-top: 20px; }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+ 
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .card-accent { background: var(--accent-light); border: none; }
+  .card-success { background: var(--success-light); border: none; }
+  .card-warn { background: var(--warn-light); border: none; }
+  .card-danger { background: var(--danger-light); border: none; }
+ 
+  /* INPUTS */
+  input[type=text], input[type=number] {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: var(--text);
+    background: #FAFAF9;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  input:focus { border-color: var(--accent); }
+ 
+  /* BUTTONS */
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .btn-sm {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-ghost {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-log {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    padding: 0;
+  }
+ 
+  /* MONTH TABS */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--card);
+    padding: 4px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    margin: 14px 16px 0;
+  }
+  .tab {
+    flex: 1;
+    padding: 9px 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+  .tab.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 700;
+  }
+ 
+  /* PROGRESS BAR */
+  .progress-wrap {
+    height: 7px;
+    border-radius: 99px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease;
+  }
+ 
+  /* CATEGORY ROW */
+  .cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .cat-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .cat-budget-wrap { display: flex; align-items: center; gap: 4px; width: 110px; }
+  .dollar { color: var(--muted); font-size: 14px; }
+  .cat-budget-wrap input { padding: 8px 8px; font-size: 14px; }
+ 
+  /* MONTH SUMMARY */
+  .summary-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .summary-left .month-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .summary-left .spent-amt { font-size: 24px; font-weight: 700; margin-top: 2px; }
+  .summary-left .spent-amt span { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .summary-right { text-align: right; }
+  .summary-right .of-budget { font-size: 12px; color: var(--muted); }
+  .summary-right .remaining { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .summary-right .rem-label { font-size: 11px; color: var(--muted); }
+ 
+  /* CATEGORY TRACKING CARD */
+  .track-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .track-name { font-weight: 600; font-size: 15px; }
+  .track-meta { display: flex; justify-content: space-between; margin-top: 5px; }
+  .track-meta span { font-size: 12px; color: var(--muted); }
+  .track-meta .over { color: var(--danger); }
+ 
+  /* INLINE EDIT */
+  .inline-edit { display: flex; align-items: center; gap: 6px; }
+  .inline-edit input { width: 90px; padding: 6px 8px; font-size: 14px; }
+ 
+  /* SEMESTER OVERVIEW */
+  .overview-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 14px; }
+  .overview-row { margin-bottom: 10px; }
+  .overview-row-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .overview-row-top .mo-name { font-size: 13px; font-weight: 500; }
+  .overview-row-top .mo-name.active-mo { font-weight: 700; }
+  .overview-row-top .mo-amt { font-size: 13px; color: var(--muted); }
+  .overview-total { border-top: 1px solid var(--accent-soft); margin-top: 12px; padding-top: 12px; display: flex; justify-content: space-between; }
+  .overview-total span { font-size: 14px; font-weight: 700; }
+ 
+  /* INCOME ROW */
+  .income-row { display: flex; align-items: center; gap: 8px; }
+ 
+  /* ADD CAT ROW */
+  .add-cat-row { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+ 
+  /* BUDGET PREVIEW */
+  .budget-preview { display: flex; justify-content: space-between; }
+  .budget-preview span { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .budget-sub { display: flex; justify-content: space-between; margin-top: 4px; }
+  .budget-sub span { font-size: 13px; color: var(--muted); }
+ 
+  .screen { display: none; }
+  .screen.active { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+ 
+  <!-- SETUP SCREEN -->
+  <div id="screen-setup" class="screen active">
+    <div class="header">
+      <div>
+        <h1>Semester Budget</h1>
+        <p>Fall Semester · Aug – Dec</p>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <div class="card">
+        <div class="label">Monthly Income / Allowance</div>
+        <div class="income-row">
+          <span class="dollar" style="font-size:18px">$</span>
+          <input type="number" id="income-input" placeholder="e.g. 600" oninput="updatePreview()" />
+        </div>
+      </div>
+ 
+      <div class="card">
+        <div class="label">Budget Categories</div>
+        <div id="cat-list"></div>
+        <div class="add-cat-row">
+          <input type="text" id="new-cat-input" placeholder="Add a category..." style="font-size:14px;padding:9px 12px" onkeydown="if(event.key==='Enter')addCategory()" />
+          <button class="btn-sm" onclick="addCategory()">+</button>
+        </div>
+      </div>
+ 
+      <div id="preview-card" class="card card-accent" style="display:none">
+        <div class="budget-preview">
+          <span>Monthly Budget Total</span>
+          <span id="preview-total">$0.00</span>
+        </div>
+        <div class="budget-sub">
+          <span>Left after budgeting</span>
+          <span id="preview-left">$0.00</span>
+        </div>
+      </div>
+ 
+      <button class="btn" onclick="startTracking()">Start Tracking →</button>
+    </div>
+  </div>
+ 
+  <!-- BUDGET SCREEN -->
+  <div id="screen-budget" class="screen">
+    <div class="header">
+      <div>
+        <h1>Semester Budget</h1>
+        <p id="header-sub">Fall · Aug – Dec</p>
+      </div>
+      <button class="edit-btn" onclick="goSetup()">Edit Setup</button>
+    </div>
+ 
+    <div class="tabs" id="month-tabs"></div>
+ 
+    <div class="section">
+      <div class="card" id="summary-card">
+        <div class="summary-top">
+          <div class="summary-left">
+            <div class="month-label" id="summary-month"></div>
+            <div class="spent-amt" id="summary-spent"></div>
+          </div>
+          <div class="summary-right">
+            <div class="of-budget" id="summary-of"></div>
+            <div class="remaining" id="summary-remaining"></div>
+            <div class="rem-label" id="summary-rem-label"></div>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-fill" id="summary-bar"></div>
+        </div>
+      </div>
+ 
+      <div id="cat-tracking"></div>
+ 
+      <div class="card card-accent" id="overview-card">
+        <div class="overview-title">Semester Overview</div>
+        <div id="overview-rows"></div>
+        <div class="overview-total">
+          <span>Total Semester</span>
+          <span id="overview-total-amt"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+</div>
+ 
+<script>
+const MONTHS = ["August","September","October","November","December"];
+let income = 0;
+let categories = [
+  {name:"Groceries", budget:""},
+  {name:"Eating Out", budget:""},
+  {name:"Transportation", budget:""},
+  {name:"Entertainment", budget:""},
+  {name:"Personal Care", budget:""},
+  {name:"Miscellaneous", budget:""}
+];
+let actuals = {}; // { "monthIdx-catName": value }
+let activeMonth = 0;
+let editingKey = null;
+ 
+function fmt(n) {
+  return "$" + Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+}
+function getColor(pct) {
+  if (pct >= 100) return "#D95F5F";
+  if (pct >= 80) return "#E8A838";
+  return "#7AAE8E";
+}
+function getActual(mi, name) { return parseFloat(actuals[mi+"-"+name]) || 0; }
+function monthSummary(mi) {
+  let tb=0, ts=0;
+  categories.forEach(c => { tb += parseFloat(c.budget)||0; ts += getActual(mi,c.name); });
+  return {tb, ts, rem: tb-ts};
+}
+function semSummary() {
+  let tb=0, ts=0;
+  MONTHS.forEach((_,i)=>{ const s=monthSummary(i); tb+=s.tb; ts+=s.ts; });
+  return {tb, ts, rem:tb-ts};
+}
+ 
+// ── SETUP ────────────────────────────────────
+function renderCatList() {
+  const el = document.getElementById("cat-list");
+  el.innerHTML = categories.map((c,i) => `
+    <div class="cat-row">
+      <span class="cat-name">${c.name}</span>
+      <div class="cat-budget-wrap">
+        <span class="dollar">$</span>
+        <input type="number" placeholder="0" value="${c.budget}"
+          oninput="categories[${i}].budget=this.value;updatePreview()"
+          style="padding:8px 8px;font-size:14px" />
+      </div>
+      <button class="btn-ghost" onclick="removeCategory(${i})">✕</button>
+    </div>
+  `).join("");
+}
+ 
+function updatePreview() {
+  income = parseFloat(document.getElementById("income-input").value) || 0;
+  const total = categories.reduce((s,c)=>s+(parseFloat(c.budget)||0),0);
+  const hasData = categories.some(c=>c.budget);
+  const pc = document.getElementById("preview-card");
+  pc.style.display = hasData ? "block" : "none";
+  document.getElementById("preview-total").textContent = fmt(total);
+  document.getElementById("preview-left").textContent = (income - total >= 0 ? "" : "-") + fmt(income - total);
+  document.getElementById("header-sub").textContent = `Fall · Aug – Dec · ${fmt(income)}/mo income`;
+}
+ 
+function addCategory() {
+  const inp = document.getElementById("new-cat-input");
+  const name = inp.value.trim();
+  if (!name) return;
+  categories.push({name, budget:""});
+  inp.value = "";
+  renderCatList();
+}
+ 
+function removeCategory(i) {
+  categories.splice(i,1);
+  renderCatList();
+  updatePreview();
+}
+ 
+function startTracking() {
+  income = parseFloat(document.getElementById("income-input").value) || 0;
+  document.getElementById("screen-setup").classList.remove("active");
+  document.getElementById("screen-budget").classList.add("active");
+  renderBudget();
+}
+ 
+function goSetup() {
+  document.getElementById("screen-budget").classList.remove("active");
+  document.getElementById("screen-setup").classList.add("active");
+  renderCatList();
+}
+ 
+// ── BUDGET ───────────────────────────────────
+function renderTabs() {
+  const el = document.getElementById("month-tabs");
+  el.innerHTML = MONTHS.map((m,i) => `
+    <button class="tab${i===activeMonth?" active":""}" onclick="setMonth(${i})">${m.slice(0,3)}</button>
+  `).join("");
+}
+ 
+function setMonth(i) {
+  activeMonth = i;
+  editingKey = null;
+  renderBudget();
+}
+ 
+function renderSummary() {
+  const {tb,ts,rem} = monthSummary(activeMonth);
+  const pct = tb > 0 ? (ts/tb)*100 : 0;
+  const color = getColor(pct);
+ 
+  document.getElementById("summary-month").textContent = MONTHS[activeMonth];
+  document.getElementById("summary-spent").innerHTML = `${fmt(ts)} <span>spent</span>`;
+  document.getElementById("summary-of").textContent = `of ${fmt(tb)} budget`;
+  document.getElementById("summary-remaining").textContent = (rem>=0?"+":"-")+fmt(rem);
+  document.getElementById("summary-remaining").style.color = rem>=0?"#7AAE8E":"#D95F5F";
+  document.getElementById("summary-rem-label").textContent = rem>=0?"remaining":"over budget";
+  document.getElementById("summary-bar").style.width = Math.min(pct,100)+"%";
+  document.getElementById("summary-bar").style.background = color;
+ 
+  const card = document.getElementById("summary-card");
+  card.className = "card";
+  if (color === "#7AAE8E") card.classList.add("card-success");
+  else if (color === "#E8A838") card.classList.add("card-warn");
+  else card.classList.add("card-danger");
+}
+ 
+function renderCatTracking() {
+  const el = document.getElementById("cat-tracking");
+  el.innerHTML = categories.map(c => {
+    const budgeted = parseFloat(c.budget)||0;
+    const spent = getActual(activeMonth, c.name);
+    const pct = budgeted>0 ? (spent/budgeted)*100 : 0;
+    const color = getColor(pct);
+    const key = activeMonth+"-"+c.name;
+    const isEditing = editingKey === key;
+ 
+    const rightSide = isEditing
+      ? `<div class="inline-edit">
+           <span class="dollar">$</span>
+           <input type="number" id="edit-${key}" placeholder="0" value="${actuals[key]||""}"
+             oninput="actuals['${key}']=this.value;renderBudget()"
+             onblur="editingKey=null;renderBudget()"
+             style="width:90px;padding:6px 8px;font-size:14px" />
+         </div>`
+      : `<button class="btn-log" onclick="startEdit('${key}')">${spent>0?fmt(spent):"Log →"}</button>`;
+ 
+    const leftMeta = `Budget: ${fmt(budgeted)}`;
+    const rightMeta = pct>=100
+      ? `<span class="over">${fmt(spent-budgeted)} over</span>`
+      : `<span>${fmt(budgeted-spent)} left</span>`;
+ 
+    return `
+      <div class="card">
+        <div class="track-header">
+          <span class="track-name">${c.name}</span>
+          ${rightSide}
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-fill" style="width:${Math.min(pct,100)}%;background:${color}"></div>
+        </div>
+        <div class="track-meta">
+          <span>${leftMeta}</span>
+          ${rightMeta}
+        </div>
+      </div>
+    `;
+  }).join("");
+ 
+  // Re-focus the active input after re-render
+  if (editingKey) {
+    const inp = document.getElementById("edit-"+editingKey);
+    if (inp) { inp.focus(); const v=inp.value; inp.value=""; inp.value=v; }
+  }
+}
+ 
+function startEdit(key) {
+  editingKey = key;
+  renderBudget();
+}
+ 
+function renderOverview() {
+  const rows = document.getElementById("overview-rows");
+  rows.innerHTML = MONTHS.map((m,i) => {
+    const {tb,ts} = monthSummary(i);
+    const pct = tb>0?(ts/tb)*100:0;
+    return `
+      <div class="overview-row">
+        <div class="overview-row-top">
+          <span class="mo-name${i===activeMonth?" active-mo":""}">${m}</span>
+          <span class="mo-amt">${fmt(ts)} / ${fmt(tb)}</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-fill" style="width:${Math.min(pct,100)}%;background:${getColor(pct)}"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+ 
+  const {tb,ts,rem} = semSummary();
+  document.getElementById("overview-total-amt").textContent = `${fmt(ts)} / ${fmt(tb)}`;
+  document.getElementById("overview-total-amt").style.color = rem>=0?"#7AAE8E":"#D95F5F";
+}
+ 
+function renderBudget() {
+  renderTabs();
+  renderSummary();
+  renderCatTracking();
+  renderOverview();
+}
+ 
+// Init
+renderCatList();
+</script>
+</body>
+</html>
