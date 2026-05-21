@@ -330,7 +330,7 @@
  
 <script>
 const MONTHS = ["August","September","October","November","December"];
-let income = 0;
+let income = parseFloat(localStorage.getItem('sb-income')) || 0;
 let categories = [
   {name:"Groceries", budget:""},
   {name:"Eating Out", budget:""},
@@ -339,7 +339,7 @@ let categories = [
   {name:"Personal Care", budget:""},
   {name:"Miscellaneous", budget:""}
 ];
-let actuals = {}; // { "monthIdx-catName": value }
+let actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};  function saveData() {   localStorage.setItem('sb-income', income);   localStorage.setItem('sb-categories', JSON.stringify(categories));   localStorage.setItem('sb-actuals', JSON.stringify(actuals)); } // { "monthIdx-catName": value }
 let activeMonth = 0;
 let editingKey = null;
  
@@ -408,6 +408,7 @@ function removeCategory(i) {
  
 function startTracking() {
   income = parseFloat(document.getElementById("income-input").value) || 0;
+  saveData();
   document.getElementById("screen-setup").classList.remove("active");
   document.getElementById("screen-budget").classList.add("active");
   renderBudget();
@@ -536,6 +537,7 @@ function renderBudget() {
   renderSummary();
   renderCatTracking();
   renderOverview();
+  saveData();
 }
  
 // Init
