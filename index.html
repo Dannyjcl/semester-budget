@@ -234,6 +234,47 @@
   .budget-sub { display: flex; justify-content: space-between; margin-top: 4px; }
   .budget-sub span { font-size: 13px; color: var(--muted); }
  
+  /* ADD TRANSACTION */
+  select {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: var(--text);
+    background: #FAFAF9;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select:focus { border-color: var(--accent); }
+  .txn-grid { display: flex; gap: 8px; margin-bottom: 8px; }
+  .txn-grid > * { flex: 1; }
+  .txn-amt-wrap { display: flex; align-items: center; gap: 4px; }
+  .txn-flash { font-size: 13px; color: var(--success); font-weight: 600; margin-top: 8px; min-height: 0; }
+
+  /* CATEGORY TOTAL */
+  .track-right { display: flex; align-items: center; gap: 8px; }
+  .track-total {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 17px; font-weight: 700; color: var(--text);
+  }
+  .add-chip {
+    background: var(--accent-light); color: var(--accent); border: none;
+    border-radius: 99px; width: 28px; height: 28px; font-size: 18px; font-weight: 700;
+    line-height: 1; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+
+  /* TRANSACTION LIST */
+  .txn-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .txn-row:first-of-type { border-top: none; }
+  .txn-main { flex: 1; min-width: 0; }
+  .txn-cat { font-size: 14px; font-weight: 600; }
+  .txn-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-amt { font-size: 14px; font-weight: 700; }
+  .txn-empty { font-size: 13px; color: var(--muted); }
+
   .screen { display: none; }
   .screen.active { display: block; }
 </style>
@@ -313,7 +354,29 @@
         </div>
       </div>
  
+      <div class="card" id="add-txn-card">
+        <div class="label">Add Transaction</div>
+        <div class="txn-grid">
+          <select id="txn-cat"></select>
+          <div class="txn-amt-wrap">
+            <span class="dollar">$</span>
+            <input type="number" id="txn-amt" step="0.01" inputmode="decimal" placeholder="0.00"
+              onkeydown="if(event.key==='Enter')addTransaction()" />
+          </div>
+        </div>
+        <input type="text" id="txn-note" placeholder="Note (optional) — e.g. Kroger"
+          onkeydown="if(event.key==='Enter')addTransaction()" />
+        <button class="btn" onclick="addTransaction()">Add to <span id="txn-month-label"></span></button>
+        <div class="txn-flash" id="txn-flash"></div>
+      </div>
+
+      <div class="label" style="margin-top:4px">Category Totals</div>
       <div id="cat-tracking"></div>
+
+      <div class="card" id="txn-list-card">
+        <div class="label" id="txn-list-label">Transactions</div>
+        <div id="txn-list"></div>
+      </div>
  
       <div class="card card-accent" id="overview-card">
         <div class="overview-title">Semester Overview</div>
@@ -339,9 +402,28 @@ let categories = JSON.parse(localStorage.getItem('sb-categories')) || [
   {name:"Personal Care", budget:""},
   {name:"Miscellaneous", budget:""}
 ];
-let actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};  function saveData() {   localStorage.setItem('sb-income', income);   localStorage.setItem('sb-categories', JSON.stringify(categories));   localStorage.setItem('sb-actuals', JSON.stringify(actuals)); } // { "monthIdx-catName": value }
-let activeMonth = 0;
+// Running total per category: { "monthIdx-catName": value }
+let actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};
+// Transaction log: [{ id, m, cat, amt, note, d }] — each one is also added into actuals
+let txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
+
+function saveData() {
+  localStorage.setItem('sb-income', income);
+  localStorage.setItem('sb-categories', JSON.stringify(categories));
+  localStorage.setItem('sb-actuals', JSON.stringify(actuals));
+  localStorage.setItem('sb-txns', JSON.stringify(txns));
+}
+
+// Open on the current month (Aug=0 … Dec=4), otherwise August
+const calIdx = new Date().getMonth() - 7;
+let activeMonth = (calIdx >= 0 && calIdx < MONTHS.length) ? calIdx : 0;
 let editingKey = null;
+let flashTimer = null;
+
+function round2(n) { return Math.round(n * 100) / 100; }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
  
 function fmt(n) {
   return "$" + Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
@@ -457,7 +539,7 @@ function renderSummary() {
  
 function renderCatTracking() {
   const el = document.getElementById("cat-tracking");
-  el.innerHTML = categories.map(c => {
+  el.innerHTML = categories.map((c, ci) => {
     const budgeted = parseFloat(c.budget)||0;
     const spent = getActual(activeMonth, c.name);
     const pct = budgeted>0 ? (spent/budgeted)*100 : 0;
@@ -473,7 +555,10 @@ function renderCatTracking() {
              onblur="editingKey=null;renderBudget()"
              style="width:90px;padding:6px 8px;font-size:14px" />
          </div>`
-      : `<button class="btn-log" onclick="startEdit('${key}')">${spent>0?fmt(spent):"Log →"}</button>`;
+      : `<div class="track-right">
+           <button class="track-total" title="Tap to correct the total" onclick="startEdit('${key}')">${spent<0?"-":""}${fmt(spent)}</button>
+           <button class="add-chip" title="Add transaction" onclick="quickAdd(${ci})">+</button>
+         </div>`;
  
     const leftMeta = `Budget: ${fmt(budgeted)}`;
     const rightMeta = pct>=100
@@ -532,10 +617,85 @@ function renderOverview() {
   document.getElementById("overview-total-amt").style.color = rem>=0?"#7AAE8E":"#D95F5F";
 }
  
+// ── TRANSACTIONS ─────────────────────────────
+function renderTxnForm() {
+  const sel = document.getElementById("txn-cat");
+  const prev = sel.value;
+  sel.innerHTML = categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+  if (categories.some(c => c.name === prev)) sel.value = prev;
+  document.getElementById("txn-month-label").textContent = MONTHS[activeMonth];
+}
+
+function addTransaction() {
+  const cat = document.getElementById("txn-cat").value;
+  const amtEl = document.getElementById("txn-amt");
+  const noteEl = document.getElementById("txn-note");
+  const amt = round2(parseFloat(amtEl.value));
+  if (!cat || !amt) { amtEl.focus(); return; }
+
+  const key = activeMonth + "-" + cat;
+  const newTotal = round2(getActual(activeMonth, cat) + amt);
+  actuals[key] = newTotal;
+  txns.unshift({ id: Date.now(), m: activeMonth, cat, amt, note: noteEl.value.trim(), d: new Date().toISOString() });
+
+  amtEl.value = "";
+  noteEl.value = "";
+  renderBudget();
+  flash(`Added ${amt<0?"-":""}${fmt(amt)} to ${cat} — total now ${fmt(newTotal)}`);
+}
+
+function deleteTxn(id) {
+  const t = txns.find(x => x.id === id);
+  if (!t) return;
+  if (!confirm(`Remove ${fmt(t.amt)} from ${t.cat}?`)) return;
+  const key = t.m + "-" + t.cat;
+  actuals[key] = round2(getActual(t.m, t.cat) - t.amt);
+  txns = txns.filter(x => x.id !== id);
+  renderBudget();
+}
+
+function quickAdd(ci) {
+  document.getElementById("txn-cat").value = categories[ci].name;
+  document.getElementById("add-txn-card").scrollIntoView({ behavior: "smooth", block: "center" });
+  document.getElementById("txn-amt").focus();
+}
+
+function flash(msg) {
+  const el = document.getElementById("txn-flash");
+  el.textContent = msg;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { el.textContent = ""; }, 3500);
+}
+
+function renderTxnList() {
+  const list = txns.filter(t => t.m === activeMonth);
+  document.getElementById("txn-list-label").textContent = `${MONTHS[activeMonth]} Transactions (${list.length})`;
+  const el = document.getElementById("txn-list");
+  if (!list.length) {
+    el.innerHTML = `<div class="txn-empty">No transactions logged this month yet.</div>`;
+    return;
+  }
+  el.innerHTML = list.map(t => {
+    const date = new Date(t.d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const sub = t.note ? `${date} · ${esc(t.note)}` : date;
+    return `
+      <div class="txn-row">
+        <div class="txn-main">
+          <div class="txn-cat">${esc(t.cat)}</div>
+          <div class="txn-sub">${sub}</div>
+        </div>
+        <span class="txn-amt">${t.amt<0?"-":""}${fmt(t.amt)}</span>
+        <button class="btn-ghost" onclick="deleteTxn(${t.id})">✕</button>
+      </div>`;
+  }).join("");
+}
+
 function renderBudget() {
   renderTabs();
   renderSummary();
+  renderTxnForm();
   renderCatTracking();
+  renderTxnList();
   renderOverview();
   saveData();
 }
