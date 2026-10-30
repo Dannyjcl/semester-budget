@@ -279,6 +279,70 @@
   .screen.active { display: block; }
 </style>
 </head>
+<button id="loginBtn">Sign in to sync</button>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+  apiKey: "AIzaSyBsYESd0Wwft53I8S0Irbki4R7fFExyMF4",
+  authDomain: "semester-budget.firebaseapp.com",
+  projectId: "semester-budget",
+  storageBucket: "semester-budget.firebasestorage.app",
+  messagingSenderId: "287172677747",
+  appId: "1:287172677747:web:429f65abd31148cf3bda06",
+  measurementId: "G-94RGBBQCEM"
+};
+  const KEYS = ['sb-income', 'sb-categories', 'sb-actuals', 'sb-txns'];
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  let ref = null;
+
+  // Bundle all four keys into one object
+  function readLocal() {
+    const data = {};
+    KEYS.forEach(k => {
+      const v = localStorage.getItem(k);
+      if (v !== null) data[k] = v;
+    });
+    return data;
+  }
+
+  // Called by saveData()
+  window.cloudSave = () => {
+    if (ref) setDoc(ref, { data: readLocal(), updated: Date.now() });
+  };
+
+  document.getElementById("loginBtn").onclick = () =>
+    signInWithPopup(auth, new GoogleAuthProvider());
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return;
+    document.getElementById("loginBtn").textContent = "Synced ✓";
+    ref = doc(db, "users", user.uid, "apps", "budget");
+
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      // Cloud has data → load it onto this device
+      const cloud = snap.data().data || {};
+      let changed = false;
+      KEYS.forEach(k => {
+        if (cloud[k] !== undefined && localStorage.getItem(k) !== cloud[k]) {
+          localStorage.setItem(k, cloud[k]);
+          changed = true;
+        }
+      });
+      if (changed) location.reload();   // redraw with the cloud data
+    } else {
+      // First sign-in → upload what's already on this device
+      window.cloudSave();
+    }
+  });
+</script>
 <body>
 <div class="app">
  
@@ -412,6 +476,7 @@ function saveData() {
   localStorage.setItem('sb-categories', JSON.stringify(categories));
   localStorage.setItem('sb-actuals', JSON.stringify(actuals));
   localStorage.setItem('sb-txns', JSON.stringify(txns));
+  if (window.cloudSave) window.cloudSave();
 }
 
 // Open on the current month (Aug=0 … Dec=4), otherwise August
