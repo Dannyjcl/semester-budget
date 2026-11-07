@@ -275,74 +275,17 @@
   .txn-amt { font-size: 14px; font-weight: 700; }
   .txn-empty { font-size: 13px; color: var(--muted); }
 
+  /* CROSS-APP CARD (data pulled from the planner) */
+  .xapp-card { display: block; text-decoration: none; color: inherit; }
+  .xapp-main { font-size: 18px; font-weight: 700; }
+  .xapp-main span { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .xapp-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .xapp-sub b { color: var(--accent); font-weight: 600; }
+
   .screen { display: none; }
   .screen.active { display: block; }
 </style>
 </head>
-<button id="loginBtn">Sign in to sync</button>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-  apiKey: "AIzaSyBsYESd0Wwft53I8S0Irbki4R7fFExyMF4",
-  authDomain: "semester-budget.firebaseapp.com",
-  projectId: "semester-budget",
-  storageBucket: "semester-budget.firebasestorage.app",
-  messagingSenderId: "287172677747",
-  appId: "1:287172677747:web:429f65abd31148cf3bda06",
-  measurementId: "G-94RGBBQCEM"
-};
-  const KEYS = ['sb-income', 'sb-categories', 'sb-actuals', 'sb-txns'];
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  let ref = null;
-
-  // Bundle all four keys into one object
-  function readLocal() {
-    const data = {};
-    KEYS.forEach(k => {
-      const v = localStorage.getItem(k);
-      if (v !== null) data[k] = v;
-    });
-    return data;
-  }
-
-  // Called by saveData()
-  window.cloudSave = () => {
-    if (ref) setDoc(ref, { data: readLocal(), updated: Date.now() });
-  };
-
-  document.getElementById("loginBtn").onclick = () =>
-    signInWithPopup(auth, new GoogleAuthProvider());
-
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) return;
-    document.getElementById("loginBtn").textContent = "Synced ✓";
-    ref = doc(db, "users", user.uid, "apps", "budget");
-
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      // Cloud has data → load it onto this device
-      const cloud = snap.data().data || {};
-      let changed = false;
-      KEYS.forEach(k => {
-        if (cloud[k] !== undefined && localStorage.getItem(k) !== cloud[k]) {
-          localStorage.setItem(k, cloud[k]);
-          changed = true;
-        }
-      });
-      if (changed) location.reload();   // redraw with the cloud data
-    } else {
-      // First sign-in → upload what's already on this device
-      window.cloudSave();
-    }
-  });
-</script>
 <body>
 <div class="app">
  
@@ -418,6 +361,12 @@
         </div>
       </div>
  
+      <a class="card xapp-card" id="xapp-card" href="https://dannyjcl.github.io/weekly-planner/" style="display:none">
+        <div class="label">This Week · Planner</div>
+        <div class="xapp-main" id="xapp-main"></div>
+        <div class="xapp-sub" id="xapp-sub"></div>
+      </a>
+
       <div class="card" id="add-txn-card">
         <div class="label">Add Transaction</div>
         <div class="txn-grid">
@@ -476,7 +425,31 @@ function saveData() {
   localStorage.setItem('sb-categories', JSON.stringify(categories));
   localStorage.setItem('sb-actuals', JSON.stringify(actuals));
   localStorage.setItem('sb-txns', JSON.stringify(txns));
-  if (window.cloudSave) window.cloudSave();
+  if (window.CloudSync) window.CloudSync.save();
+}
+
+// Called by cloud-sync.js when another device changed the data
+let inSetupEdit = false;
+function reloadFromStorage() {
+  income = parseFloat(localStorage.getItem('sb-income')) || 0;
+  categories = JSON.parse(localStorage.getItem('sb-categories')) || categories;
+  actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};
+  txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
+  editingKey = null;
+  document.getElementById("income-input").value = income || "";
+  if (inSetupEdit) { renderCatList(); updatePreview(); }
+  else if (localStorage.getItem('sb-categories')) startTracking();
+  else renderCatList();
+}
+
+// Small snapshot the planner (or any other app) can read from the cloud
+function budgetSummary() {
+  const mi = (calIdx >= 0 && calIdx < MONTHS.length) ? calIdx : activeMonth;
+  const m = monthSummary(mi), s = semSummary();
+  return {
+    month: MONTHS[mi], spent: round2(m.ts), budget: round2(m.tb), remaining: round2(m.rem),
+    semesterSpent: round2(s.ts), semesterBudget: round2(s.tb), income, txnCount: txns.length,
+  };
 }
 
 // Open on the current month (Aug=0 … Dec=4), otherwise August
@@ -555,6 +528,7 @@ function removeCategory(i) {
  
 function startTracking() {
   income = parseFloat(document.getElementById("income-input").value) || 0;
+  inSetupEdit = false;
   saveData();
   document.getElementById("screen-setup").classList.remove("active");
   document.getElementById("screen-budget").classList.add("active");
@@ -562,6 +536,7 @@ function startTracking() {
 }
  
 function goSetup() {
+  inSetupEdit = true;
   document.getElementById("screen-budget").classList.remove("active");
   document.getElementById("screen-setup").classList.add("active");
   renderCatList();
@@ -771,6 +746,34 @@ if (localStorage.getItem('sb-categories')) {
   document.getElementById("income-input").value = income;
   startTracking();
 }
+</script>
+
+<!-- Cloud sync (Firebase): runs after the app above has loaded -->
+<script type="module">
+  import { startCloudSync } from "./cloud-sync.js";
+
+  const sync = startCloudSync({
+    appId: "budget",
+    keys: ["sb-income", "sb-categories", "sb-actuals", "sb-txns"],
+    summary: () => budgetSummary(),
+    onRemoteChange: () => reloadFromStorage(),
+    pill: { bg: "#C9856A" },
+  });
+
+  // Pull the planner's weekly summary into this app
+  const fmtH = (h) => (Math.round(h * 10) / 10) + "h";
+  sync.watchApp("planner", (doc) => {
+    const card = document.getElementById("xapp-card");
+    const p = doc && doc.summary;
+    if (!p) { card.style.display = "none"; return; }
+    card.style.display = "block";
+    const over = p.overallocated > 0;
+    document.getElementById("xapp-main").innerHTML = over
+      ? `${fmtH(p.overallocated)} <span>over-allocated this week</span>`
+      : `${fmtH(p.unallocated)} <span>free of ${fmtH(p.discretionary)} discretionary</span>`;
+    const tasks = p.tasksToday ? `${p.tasksLeftToday} of ${p.tasksToday} tasks left today · ` : "";
+    document.getElementById("xapp-sub").innerHTML = `${tasks}<b>Open planner →</b>`;
+  });
 </script>
 </body>
 </html>
