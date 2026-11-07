@@ -275,6 +275,21 @@
   .txn-amt { font-size: 14px; font-weight: 700; }
   .txn-empty { font-size: 13px; color: var(--muted); }
 
+  /* INCOME */
+  .inc-head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .inc-total { font-size: 22px; font-weight: 700; margin-top: 2px; color: var(--success); }
+  .inc-total span { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .inc-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .inc-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .inc-repeat { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .inc-repeat input { width: 18px; height: 18px; accent-color: var(--success); }
+  .btn-success { background: var(--success); }
+  .inc-list { margin-top: 10px; }
+  .inc-list .txn-amt { color: var(--success); }
+  .rec-badge { font-size: 10px; font-weight: 700; color: var(--success); background: var(--success-light); border-radius: 99px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+  .sum-net { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .sum-net b { font-weight: 700; }
+
   /* CROSS-APP CARD (data pulled from the planner) */
   .xapp-card { display: block; text-decoration: none; color: inherit; }
   .xapp-main { font-size: 18px; font-weight: 700; }
@@ -300,7 +315,7 @@
  
     <div class="section">
       <div class="card">
-        <div class="label">Monthly Income / Allowance</div>
+        <div class="label">Expected Monthly Income</div>
         <div class="income-row">
           <span class="dollar" style="font-size:18px">$</span>
           <input type="number" id="income-input" placeholder="e.g. 600" oninput="updatePreview()" />
@@ -359,6 +374,36 @@
         <div class="progress-wrap">
           <div class="progress-fill" id="summary-bar"></div>
         </div>
+        <div class="sum-net" id="summary-net"></div>
+      </div>
+
+      <div class="card" id="income-card">
+        <div class="inc-head">
+          <div>
+            <div class="label" style="margin-bottom:0">Income · <span id="inc-month"></span></div>
+            <div class="inc-total" id="inc-total"></div>
+            <div class="inc-sub" id="inc-sub"></div>
+          </div>
+          <button class="add-chip" id="inc-toggle" title="Add income" onclick="toggleIncomeForm()">+</button>
+        </div>
+        <div class="inc-form" id="inc-form" style="display:none">
+          <div class="txn-grid">
+            <select id="inc-src">
+              <option>Paycheck</option><option>Family</option><option>Refund</option>
+              <option>Scholarship</option><option>Side income</option><option>Other</option>
+            </select>
+            <div class="txn-amt-wrap">
+              <span class="dollar">$</span>
+              <input type="number" id="inc-amt" step="0.01" inputmode="decimal" placeholder="0.00"
+                onkeydown="if(event.key==='Enter')addIncome()" />
+            </div>
+          </div>
+          <input type="text" id="inc-note" placeholder="Note (optional) — e.g. Venmo from Mom"
+            onkeydown="if(event.key==='Enter')addIncome()" />
+          <label class="inc-repeat"><input type="checkbox" id="inc-rec" /> Repeats every month from <span id="inc-rec-month"></span> on</label>
+          <button class="btn btn-success" onclick="addIncome()">Add income to <span id="inc-month-label"></span></button>
+        </div>
+        <div class="inc-list" id="inc-list"></div>
       </div>
  
       <a class="card xapp-card" id="xapp-card" href="https://dannyjcl.github.io/weekly-planner/" style="display:none">
@@ -398,6 +443,10 @@
           <span>Total Semester</span>
           <span id="overview-total-amt"></span>
         </div>
+        <div class="budget-sub" style="margin-top:6px">
+          <span>Semester income · net</span>
+          <span id="overview-income-amt"></span>
+        </div>
       </div>
     </div>
   </div>
@@ -419,12 +468,16 @@ let categories = JSON.parse(localStorage.getItem('sb-categories')) || [
 let actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};
 // Transaction log: [{ id, m, cat, amt, note, d }] — each one is also added into actuals
 let txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
+// Income log: [{ id, m, src, amt, note, d, rec, end }]
+//   rec=true  -> repeats every month from m on (until month `end`, if set)
+let incomes = JSON.parse(localStorage.getItem('sb-incomes')) || [];
 
 function saveData() {
   localStorage.setItem('sb-income', income);
   localStorage.setItem('sb-categories', JSON.stringify(categories));
   localStorage.setItem('sb-actuals', JSON.stringify(actuals));
   localStorage.setItem('sb-txns', JSON.stringify(txns));
+  localStorage.setItem('sb-incomes', JSON.stringify(incomes));
   if (window.CloudSync) window.CloudSync.save();
 }
 
@@ -435,6 +488,7 @@ function reloadFromStorage() {
   categories = JSON.parse(localStorage.getItem('sb-categories')) || categories;
   actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};
   txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
+  incomes = JSON.parse(localStorage.getItem('sb-incomes')) || [];
   editingKey = null;
   document.getElementById("income-input").value = income || "";
   if (inSetupEdit) { renderCatList(); updatePreview(); }
@@ -449,6 +503,8 @@ function budgetSummary() {
   return {
     month: MONTHS[mi], spent: round2(m.ts), budget: round2(m.tb), remaining: round2(m.rem),
     semesterSpent: round2(s.ts), semesterBudget: round2(s.tb), income, txnCount: txns.length,
+    incomeReceived: monthIncome(mi), net: round2(monthIncome(mi) - m.ts),
+    semesterIncome: semIncome(), semesterNet: round2(semIncome() - s.ts),
   };
 }
 
@@ -570,6 +626,10 @@ function renderSummary() {
   document.getElementById("summary-bar").style.width = Math.min(pct,100)+"%";
   document.getElementById("summary-bar").style.background = color;
  
+  const got = monthIncome(activeMonth), net = round2(got - ts);
+  document.getElementById("summary-net").innerHTML =
+    `<span>Income ${fmt(got)}</span><span>Net <b style="color:${net>=0?"#7AAE8E":"#D95F5F"}">${net>=0?"+":"-"}${fmt(net)}</b></span>`;
+
   const card = document.getElementById("summary-card");
   card.className = "card";
   if (color === "#7AAE8E") card.classList.add("card-success");
@@ -655,6 +715,9 @@ function renderOverview() {
   const {tb,ts,rem} = semSummary();
   document.getElementById("overview-total-amt").textContent = `${fmt(ts)} / ${fmt(tb)}`;
   document.getElementById("overview-total-amt").style.color = rem>=0?"#7AAE8E":"#D95F5F";
+  const si = semIncome(), sn = round2(si - ts);
+  document.getElementById("overview-income-amt").innerHTML =
+    `${fmt(si)} · <b style="color:${sn>=0?"#7AAE8E":"#D95F5F"}">${sn>=0?"+":"-"}${fmt(sn)}</b>`;
 }
  
 // ── TRANSACTIONS ─────────────────────────────
@@ -730,9 +793,84 @@ function renderTxnList() {
   }).join("");
 }
 
+// ── INCOME ───────────────────────────────────
+function incomeInMonth(e, mi) {
+  if (!e.rec) return e.m === mi;
+  return mi >= e.m && (e.end == null || mi <= e.end);
+}
+function incomesFor(mi) { return incomes.filter(e => incomeInMonth(e, mi)); }
+function monthIncome(mi) { return round2(incomesFor(mi).reduce((s, e) => s + e.amt, 0)); }
+function semIncome() { return round2(MONTHS.reduce((s, _, i) => s + monthIncome(i), 0)); }
+
+function toggleIncomeForm(force) {
+  const f = document.getElementById("inc-form");
+  const open = force !== undefined ? force : f.style.display === "none";
+  f.style.display = open ? "block" : "none";
+  document.getElementById("inc-toggle").textContent = open ? "×" : "+";
+  if (open) document.getElementById("inc-amt").focus();
+}
+
+function addIncome() {
+  const amtEl = document.getElementById("inc-amt");
+  const noteEl = document.getElementById("inc-note");
+  const recEl = document.getElementById("inc-rec");
+  const amt = round2(parseFloat(amtEl.value));
+  if (!amt || amt <= 0) { amtEl.focus(); return; }
+  const src = document.getElementById("inc-src").value;
+  incomes.unshift({ id: Date.now(), m: activeMonth, src, amt, note: noteEl.value.trim(),
+                    d: new Date().toISOString(), rec: recEl.checked, end: null });
+  amtEl.value = ""; noteEl.value = ""; recEl.checked = false;
+  toggleIncomeForm(false);
+  renderBudget();
+}
+
+function removeIncome(id) {
+  const e = incomes.find(x => x.id === id);
+  if (!e) return;
+  if (e.rec && activeMonth > e.m) {
+    // Recurring and started earlier: stop it from this month on, keep past months
+    if (!confirm(`Stop ${e.src} (${fmt(e.amt)}/mo) from ${MONTHS[activeMonth]} on?\nEarlier months keep it.`)) return;
+    e.end = activeMonth - 1;
+  } else {
+    if (!confirm(`Remove ${fmt(e.amt)} ${e.src}${e.rec ? " (every month)" : ""}?`)) return;
+    incomes = incomes.filter(x => x.id !== id);
+  }
+  renderBudget();
+}
+
+function renderIncome() {
+  const list = incomesFor(activeMonth);
+  const got = monthIncome(activeMonth);
+  document.getElementById("inc-month").textContent = MONTHS[activeMonth];
+  document.getElementById("inc-month-label").textContent = MONTHS[activeMonth];
+  document.getElementById("inc-rec-month").textContent = MONTHS[activeMonth];
+  document.getElementById("inc-total").innerHTML = `${fmt(got)} <span>received</span>`;
+  document.getElementById("inc-sub").textContent = income
+    ? (got >= income ? `${fmt(got - income)} above your expected ${fmt(income)}`
+                     : `${fmt(income - got)} short of your expected ${fmt(income)}`)
+    : "Set an expected monthly income in Edit Setup to compare.";
+  const el = document.getElementById("inc-list");
+  if (!list.length) { el.innerHTML = `<div class="txn-empty">No income logged for ${MONTHS[activeMonth]} yet.</div>`; return; }
+  el.innerHTML = list.map(e => {
+    const date = e.rec ? (e.m === activeMonth ? "Starts this month" : `Monthly since ${MONTHS[e.m].slice(0,3)}`)
+                       : new Date(e.d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const sub = e.note ? `${date} · ${esc(e.note)}` : date;
+    return `
+      <div class="txn-row">
+        <div class="txn-main">
+          <div class="txn-cat">${esc(e.src)}${e.rec ? '<span class="rec-badge">MONTHLY</span>' : ""}</div>
+          <div class="txn-sub">${sub}</div>
+        </div>
+        <span class="txn-amt">+${fmt(e.amt)}</span>
+        <button class="btn-ghost" onclick="removeIncome(${e.id})">✕</button>
+      </div>`;
+  }).join("");
+}
+
 function renderBudget() {
   renderTabs();
   renderSummary();
+  renderIncome();
   renderTxnForm();
   renderCatTracking();
   renderTxnList();
@@ -754,7 +892,7 @@ if (localStorage.getItem('sb-categories')) {
 
   const sync = startCloudSync({
     appId: "budget",
-    keys: ["sb-income", "sb-categories", "sb-actuals", "sb-txns"],
+    keys: ["sb-income", "sb-categories", "sb-actuals", "sb-txns", "sb-incomes"],
     summary: () => budgetSummary(),
     onRemoteChange: () => reloadFromStorage(),
     pill: { bg: "#C9856A" },
