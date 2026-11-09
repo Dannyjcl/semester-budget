@@ -8,6 +8,10 @@ This is a simple html with local storage to keep their data saved as they revisi
 I will upgrade using Firebase to make put this onto a cloud database. 
 
 
+## Upcoming expenses
+
+The **Upcoming Expenses** card holds known future costs (textbooks, trips, dues) with an amount, due date and category. Each one shows a countdown and turns orange inside a week and red when overdue. **Mark paid** logs it as a real transaction in its due month and category, and **Undo** takes it back out. The month summary shows what's still planned for that month and a projected net. Stored in `sb-planned` and synced through Firebase.
+
 ## Cloud sync (Firebase)
 
 Tap **Sign in to sync** (bottom right) and sign in with Google. Your budget is mirrored to Firestore at `users/{uid}/apps/budget` and stays in sync live across every device. It still works offline, and edits upload when you're back online.

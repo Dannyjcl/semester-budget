@@ -290,6 +290,30 @@
   .sum-net { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 10px; }
   .sum-net b { font-weight: 700; }
 
+  /* UPCOMING (PLANNED) EXPENSES */
+  .pl-total { font-size: 22px; font-weight: 700; margin-top: 2px; color: var(--warn); }
+  .pl-total span { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .pl-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  input[type=date] {
+    width: 100%; border: 1.5px solid var(--border); border-radius: 10px; padding: 9px 12px;
+    font-size: 15px; color: var(--text); background: #FAFAF9; font-family: 'DM Sans', sans-serif;
+    outline: none; -webkit-appearance: none; min-height: 43px;
+  }
+  .btn-warn { background: var(--warn); }
+  .pl-list { margin-top: 10px; }
+  .pl-due { font-weight: 600; }
+  .pl-due.soon { color: var(--warn); }
+  .pl-due.late { color: var(--danger); }
+  .pl-pay {
+    background: var(--success-light); color: var(--success); border: none; border-radius: 99px;
+    font: 700 12px 'DM Sans', sans-serif; padding: 5px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .pl-row .txn-sub { white-space: normal; }
+  .pl-row.paid .txn-cat, .pl-row.paid .txn-amt { text-decoration: line-through; color: var(--muted); }
+  .pl-row.paid .pl-pay { background: var(--border); color: var(--muted); }
+  .sum-planned { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .sum-planned b { font-weight: 700; }
+
   /* CROSS-APP CARD (data pulled from the planner) */
   .xapp-card { display: block; text-decoration: none; color: inherit; }
   .xapp-main { font-size: 18px; font-weight: 700; }
@@ -375,6 +399,7 @@
           <div class="progress-fill" id="summary-bar"></div>
         </div>
         <div class="sum-net" id="summary-net"></div>
+        <div class="sum-planned" id="summary-planned" style="display:none"></div>
       </div>
 
       <div class="card" id="income-card">
@@ -404,6 +429,32 @@
           <button class="btn btn-success" onclick="addIncome()">Add income to <span id="inc-month-label"></span></button>
         </div>
         <div class="inc-list" id="inc-list"></div>
+      </div>
+
+      <div class="card" id="planned-card">
+        <div class="inc-head">
+          <div>
+            <div class="label" style="margin-bottom:0">Upcoming Expenses</div>
+            <div class="pl-total" id="pl-total"></div>
+            <div class="inc-sub" id="pl-sub"></div>
+          </div>
+          <button class="add-chip" id="pl-toggle" title="Plan an expense" onclick="togglePlannedForm()">+</button>
+        </div>
+        <div class="pl-form" id="pl-form" style="display:none">
+          <input type="text" id="pl-name" placeholder="What is it? — e.g. Formal tickets, textbooks"
+            style="margin-bottom:8px" onkeydown="if(event.key==='Enter')addPlanned()" />
+          <div class="txn-grid">
+            <div class="txn-amt-wrap">
+              <span class="dollar">$</span>
+              <input type="number" id="pl-amt" step="0.01" inputmode="decimal" placeholder="0.00"
+                onkeydown="if(event.key==='Enter')addPlanned()" />
+            </div>
+            <input type="date" id="pl-due" aria-label="Due date" />
+          </div>
+          <select id="pl-cat" aria-label="Category"></select>
+          <button class="btn btn-warn" onclick="addPlanned()">Plan this expense</button>
+        </div>
+        <div class="pl-list" id="pl-list"></div>
       </div>
  
       <a class="card xapp-card" id="xapp-card" href="https://dannyjcl.github.io/weekly-planner/" style="display:none">
@@ -471,8 +522,12 @@ let txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
 // Income log: [{ id, m, src, amt, note, d, rec, end }]
 //   rec=true  -> repeats every month from m on (until month `end`, if set)
 let incomes = JSON.parse(localStorage.getItem('sb-incomes')) || [];
+// Planned (upcoming) expenses: [{ id, name, amt, due:"YYYY-MM-DD", cat, paid, txnId }]
+//   "Mark paid" logs a real transaction in the due month and links it via txnId
+let planned = JSON.parse(localStorage.getItem('sb-planned')) || [];
 
 function saveData() {
+  localStorage.setItem('sb-planned', JSON.stringify(planned));
   localStorage.setItem('sb-income', income);
   localStorage.setItem('sb-categories', JSON.stringify(categories));
   localStorage.setItem('sb-actuals', JSON.stringify(actuals));
@@ -489,6 +544,7 @@ function reloadFromStorage() {
   actuals = JSON.parse(localStorage.getItem('sb-actuals')) || {};
   txns = JSON.parse(localStorage.getItem('sb-txns')) || [];
   incomes = JSON.parse(localStorage.getItem('sb-incomes')) || [];
+  planned = JSON.parse(localStorage.getItem('sb-planned')) || [];
   editingKey = null;
   document.getElementById("income-input").value = income || "";
   if (inSetupEdit) { renderCatList(); updatePreview(); }
@@ -505,6 +561,8 @@ function budgetSummary() {
     semesterSpent: round2(s.ts), semesterBudget: round2(s.tb), income, txnCount: txns.length,
     incomeReceived: monthIncome(mi), net: round2(monthIncome(mi) - m.ts),
     semesterIncome: semIncome(), semesterNet: round2(semIncome() - s.ts),
+    plannedDue: plannedUnpaidTotal(), plannedDueThisMonth: plannedUnpaidIn(mi),
+    nextPlanned: nextPlanned(),
   };
 }
 
@@ -630,6 +688,11 @@ function renderSummary() {
   document.getElementById("summary-net").innerHTML =
     `<span>Income ${fmt(got)}</span><span>Net <b style="color:${net>=0?"#7AAE8E":"#D95F5F"}">${net>=0?"+":"-"}${fmt(net)}</b></span>`;
 
+  const due = plannedUnpaidIn(activeMonth), proj = round2(net - due);
+  const pEl = document.getElementById("summary-planned");
+  pEl.style.display = due > 0 ? "flex" : "none";
+  pEl.innerHTML = `<span>Planned still due ${fmt(due)}</span><span>Projected <b style="color:${proj>=0?"#7AAE8E":"#D95F5F"}">${proj>=0?"+":"-"}${fmt(proj)}</b></span>`;
+
   const card = document.getElementById("summary-card");
   card.className = "card";
   if (color === "#7AAE8E") card.classList.add("card-success");
@@ -754,6 +817,8 @@ function deleteTxn(id) {
   const key = t.m + "-" + t.cat;
   actuals[key] = round2(getActual(t.m, t.cat) - t.amt);
   txns = txns.filter(x => x.id !== id);
+  // If this came from a planned expense, put that expense back to unpaid
+  planned.forEach(p => { if (p.txnId === id) { p.paid = false; p.txnId = null; } });
   renderBudget();
 }
 
@@ -867,10 +932,124 @@ function renderIncome() {
   }).join("");
 }
 
+// ── UPCOMING (PLANNED) EXPENSES ──────────────
+function semYear() { return new Date().getFullYear(); }
+function parseDue(s) { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+// Month tab index (Aug=0 … Dec=4) for a due date; dates outside the semester clamp to the nearest end
+function dueMonth(s) { return Math.max(0, Math.min(MONTHS.length-1, parseDue(s).getMonth() - 7)); }
+function daysUntil(s) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((parseDue(s) - t) / 86400000);
+}
+function plannedUnpaidIn(mi) { return round2(planned.filter(p => !p.paid && dueMonth(p.due) === mi).reduce((s,p)=>s+p.amt,0)); }
+function plannedUnpaidTotal() { return round2(planned.filter(p => !p.paid).reduce((s,p)=>s+p.amt,0)); }
+function nextPlanned() {
+  const p = planned.filter(x => !x.paid).sort((a,b) => a.due.localeCompare(b.due))[0];
+  return p ? { name: p.name, amt: p.amt, due: p.due } : null;
+}
+
+function togglePlannedForm(force) {
+  const f = document.getElementById("pl-form");
+  const open = force !== undefined ? force : f.style.display === "none";
+  f.style.display = open ? "block" : "none";
+  document.getElementById("pl-toggle").textContent = open ? "×" : "+";
+  if (open) {
+    const d = document.getElementById("pl-due");
+    d.min = `${semYear()}-08-01`; d.max = `${semYear()}-12-31`;
+    document.getElementById("pl-name").focus();
+  }
+}
+
+function addPlanned() {
+  const nameEl = document.getElementById("pl-name");
+  const amtEl = document.getElementById("pl-amt");
+  const dueEl = document.getElementById("pl-due");
+  const name = nameEl.value.trim();
+  const amt = round2(parseFloat(amtEl.value));
+  if (!name) { nameEl.focus(); return; }
+  if (!amt || amt <= 0) { amtEl.focus(); return; }
+  if (!dueEl.value) { dueEl.focus(); return; }
+  planned.push({ id: Date.now(), name, amt, due: dueEl.value,
+                 cat: document.getElementById("pl-cat").value, paid: false, txnId: null });
+  nameEl.value = ""; amtEl.value = ""; dueEl.value = "";
+  togglePlannedForm(false);
+  renderBudget();
+}
+
+function payPlanned(id) {
+  const p = planned.find(x => x.id === id);
+  if (!p) return;
+  const mi = dueMonth(p.due);
+  if (p.paid) {
+    // Undo: take the linked transaction back out
+    if (!confirm(`Mark "${p.name}" as not paid? This removes the ${fmt(p.amt)} it logged in ${MONTHS[mi]}.`)) return;
+    const t = txns.find(x => x.id === p.txnId);
+    if (t) { actuals[t.m+"-"+t.cat] = round2(getActual(t.m, t.cat) - t.amt); txns = txns.filter(x => x.id !== t.id); }
+    p.paid = false; p.txnId = null;
+  } else {
+    // Category may have been renamed/removed since planning; fall back to the first one
+    const cat = categories.some(c => c.name === p.cat) ? p.cat : (categories[0] && categories[0].name);
+    if (!cat) { alert("Add a budget category first (Edit Setup)."); return; }
+    const tid = Date.now();
+    actuals[mi+"-"+cat] = round2(getActual(mi, cat) + p.amt);
+    txns.unshift({ id: tid, m: mi, cat, amt: p.amt, note: `Planned: ${p.name}`, d: new Date().toISOString() });
+    p.paid = true; p.txnId = tid; p.cat = cat;
+  }
+  renderBudget();
+}
+
+function removePlanned(id) {
+  const p = planned.find(x => x.id === id);
+  if (!p) return;
+  const extra = p.paid ? "\n(The transaction it logged stays in your spending.)" : "";
+  if (!confirm(`Remove "${p.name}" (${fmt(p.amt)}) from upcoming expenses?${extra}`)) return;
+  planned = planned.filter(x => x.id !== id);
+  renderBudget();
+}
+
+function renderPlanned() {
+  const sel = document.getElementById("pl-cat");
+  const prev = sel.value;
+  sel.innerHTML = categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+  if (categories.some(c => c.name === prev)) sel.value = prev;
+
+  const unpaid = planned.filter(p => !p.paid).sort((a,b) => a.due.localeCompare(b.due));
+  const paid = planned.filter(p => p.paid).sort((a,b) => a.due.localeCompare(b.due));
+  const total = plannedUnpaidTotal();
+  document.getElementById("pl-total").innerHTML = `${fmt(total)} <span>still to pay this semester</span>`;
+  const n = nextPlanned();
+  document.getElementById("pl-sub").textContent = n
+    ? `Next: ${n.name} · ${fmt(n.amt)} · ${parseDue(n.due).toLocaleDateString(undefined,{month:"short",day:"numeric"})}`
+    : (planned.length ? "Everything planned is paid." : "Plan known costs ahead — books, trips, dues.");
+
+  const el = document.getElementById("pl-list");
+  if (!planned.length) { el.innerHTML = ""; return; }
+  el.innerHTML = unpaid.concat(paid).map(p => {
+    const days = daysUntil(p.due);
+    const dateTxt = parseDue(p.due).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    let when, cls = "";
+    if (p.paid) when = `Paid · ${dateTxt}`;
+    else if (days < 0) { when = `${-days} day${days===-1?"":"s"} overdue`; cls = "late"; }
+    else if (days === 0) { when = "Due today"; cls = "soon"; }
+    else { when = `Due ${dateTxt} · in ${days} day${days===1?"":"s"}`; if (days <= 7) cls = "soon"; }
+    return `
+      <div class="txn-row pl-row${p.paid ? " paid" : ""}">
+        <div class="txn-main">
+          <div class="txn-cat">${esc(p.name)}</div>
+          <div class="txn-sub"><span class="pl-due ${cls}">${when}</span> · ${esc(p.cat)}</div>
+        </div>
+        <span class="txn-amt">${fmt(p.amt)}</span>
+        <button class="pl-pay" onclick="payPlanned(${p.id})">${p.paid ? "Undo" : "Mark paid"}</button>
+        <button class="btn-ghost" onclick="removePlanned(${p.id})">✕</button>
+      </div>`;
+  }).join("");
+}
+
 function renderBudget() {
   renderTabs();
   renderSummary();
   renderIncome();
+  renderPlanned();
   renderTxnForm();
   renderCatTracking();
   renderTxnList();
@@ -892,7 +1071,7 @@ if (localStorage.getItem('sb-categories')) {
 
   const sync = startCloudSync({
     appId: "budget",
-    keys: ["sb-income", "sb-categories", "sb-actuals", "sb-txns", "sb-incomes"],
+    keys: ["sb-income", "sb-categories", "sb-actuals", "sb-txns", "sb-incomes", "sb-planned"],
     summary: () => budgetSummary(),
     onRemoteChange: () => reloadFromStorage(),
     pill: { bg: "#C9856A" },
