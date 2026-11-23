@@ -614,8 +614,16 @@ function renderCatList() {
   `).join("");
 }
  
+// Save the expected monthly income as soon as it's typed, so it isn't lost
+// if the page is reloaded or closed before "Start Tracking" is pressed
+function saveIncome() {
+  localStorage.setItem('sb-income', income);
+  if (window.CloudSync) window.CloudSync.save();
+}
+
 function updatePreview() {
   income = parseFloat(document.getElementById("income-input").value) || 0;
+  saveIncome();
   const total = categories.reduce((s,c)=>s+(parseFloat(c.budget)||0),0);
   const hasData = categories.some(c=>c.budget);
   const pc = document.getElementById("preview-card");
@@ -1059,9 +1067,11 @@ function renderBudget() {
  
 // Init
 renderCatList();
+document.getElementById("income-input").value = income || "";
 if (localStorage.getItem('sb-categories')) {
-  document.getElementById("income-input").value = income;
   startTracking();
+} else if (income) {
+  updatePreview();
 }
 </script>
 
